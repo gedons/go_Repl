@@ -2,13 +2,11 @@ package runner
 
 import (
 	"bytes"
-	"context"
 	"fmt"
+	"go-repl/internal/utils"
 	"log"
 	"os"
 	"os/exec"
-	"time"
-	"go-repl/internal/utils"
 )
 
 
@@ -27,55 +25,45 @@ func cleanUpTempFiles(dir string) error {
 
 func ExecuteCode(code string) (string, string) {
 
-	// Log the start of execution
-	logExecutionStep("Starting code execution")
+    // Log the start of execution
+    logExecutionStep("Starting code execution")
 
-	// Save code to temp.go
-	_, dir, err := utils.SaveCodeToFile(code)
-	if err != nil {
-		logExecutionStep(fmt.Sprintf("Failed to save code: %v", err))
-		return "", fmt.Sprintf("Failed to save code: %v", err)
-	}
-	logExecutionStep("Code saved to file")
+    // Save code to temp.go
+    _, dir, err := utils.SaveCodeToFile(code)
+    if err != nil {
+        logExecutionStep(fmt.Sprintf("Failed to save code: %v", err))
+        return "", fmt.Sprintf("Failed to save code: %v", err)
+    }
+    logExecutionStep("Code saved to file")
 
+    // Run Docker command without timeout
+    cmd := exec.Command("docker", "run", "--rm",
+        "-v", fmt.Sprintf("%s:/app", dir),
+        "-w", "/app",
+        "golang:1.21-alpine",
+        "go", "run", "temp.go",
+    )
 
-	// Set up timeout context (5 seconds)
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
-	defer cancel()
+    var stdout, stderr bytes.Buffer
+    cmd.Stdout = &stdout
+    cmd.Stderr = &stderr
 
-	// Run Docker command with context
-	cmd := exec.CommandContext(ctx, "docker", "run", "--rm",
-		"-v", fmt.Sprintf("%s:/app", dir),
-		"-w", "/app",
-		"golang:1.21-alpine",
-		"go", "run", "temp.go",
-	)
+    // Run the command
+    err = cmd.Run()
+    if err != nil {
+        logExecutionStep("Error executing command")
+        logExecutionStep(fmt.Sprintf("Execution failed: %v", stderr.String()))
+        return stdout.String(), stderr.String()
+    }
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+    logExecutionStep("Execution successful")
 
-	// Run the command
-	err = cmd.Run()
-	if err != nil {
-		logExecutionStep("Error executing command")
-		if ctx.Err() == context.DeadlineExceeded {
-			logExecutionStep("Execution timed out")
-			return "", "Code execution timed out"
-		}
-		logExecutionStep(fmt.Sprintf("Execution failed: %v", stderr.String()))
-		return stdout.String(), stderr.String()
-	}
+    // Clean up temp files after execution
+    err = cleanUpTempFiles(dir)
+    if err != nil {
+        logExecutionStep(fmt.Sprintf("Error cleaning up temp files: %v", err))
+    }
 
-	logExecutionStep("Execution successful")
-
-	// Clean up temp files after execution	
-	err = cleanUpTempFiles(dir)
-	if err != nil {
-		logExecutionStep(fmt.Sprintf("Error cleaning up temp files: %v", err))
-	}
-
-
-	return stdout.String(), ""
+    return stdout.String(), ""
 }
 
