@@ -1,34 +1,38 @@
 package utils
 
 import (
-	"os"
+    "os"
+    "path/filepath"
 )
 
 func SaveCodeToFile(code string) (string, string, error) {
-	dir := "./code-temp"
-	filePath := dir + "/temp.go"
+    dir, err := filepath.Abs("./code-temp") 
+    if err != nil {
+        return "", "", err
+    }
 
-	err := os.MkdirAll(dir, 0755)
-	if err != nil {
-		return "", "", err
-	}
+    filePath := filepath.Join(dir, "temp.go")
 
-	file, err := os.Create(filePath)
-	if err != nil {
-		return "", "", err
-	}
-	defer file.Close()
+    err = os.MkdirAll(dir, 0755)
+    if err != nil {
+        return "", "", err
+    }
 
-	_, err = file.WriteString(code)
-	if err != nil {
-		return "", "", err
-	}
+    file, err := os.Create(filePath)
+    if err != nil {
+        return "", "", err
+    }
+    defer file.Close()
 
-	// 🔽 Ensure contents are flushed to disk
-	if err := file.Sync(); err != nil {
-		return "", "", err
-	}
+    _, err = file.WriteString(code)
+    if err != nil {
+        return "", "", err
+    }
 
-	return filePath, dir, nil
+    // Ensure contents are flushed to disk
+    if err := file.Sync(); err != nil {
+        return "", "", err
+    }
+
+    return filePath, dir, nil
 }
-
