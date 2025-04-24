@@ -1,9 +1,15 @@
-# Dockerfile
 FROM golang:1.21-alpine
 
 WORKDIR /app
+
+COPY go.mod ./
+COPY go.sum ./
+RUN go mod download
+
 COPY . .
 
-ENV EXEC_TIMEOUT=3s
+RUN go build -o repl cmd/server/main.go
 
-CMD ["go", "run", "temp.go"]
+EXPOSE 8080
+
+CMD ["./repl"]

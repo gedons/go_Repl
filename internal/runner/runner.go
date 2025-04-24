@@ -9,16 +9,16 @@ import (
 
 func ExecuteCode(code string) (string, string) {
 	// Step 1: Save code to temp.go
-	filePath, err := utils.SaveCodeToFile(code)
+	_, dir, err := utils.SaveCodeToFile(code)
 	if err != nil {
 		return "", fmt.Sprintf("Failed to save code: %v", err)
 	}
 
 	// Step 2: Run Docker command
 	cmd := exec.Command("docker", "run", "--rm",
-		"-v", fmt.Sprintf("%s:/app/temp.go", filePath),
+		"-v", fmt.Sprintf("%s:/app", dir),
 		"-w", "/app",
-		"golang:1.21-alpine", 
+		"golang:1.21-alpine",
 		"go", "run", "temp.go",
 	)
 
