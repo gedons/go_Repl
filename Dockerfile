@@ -14,7 +14,7 @@ RUN go build -o main ./cmd/server
 # Stage 2: Final image without DinD
 FROM alpine:3.18
 
-# Install Docker client only (no dockerd), and other required tools
+# Install Docker client only, and other required tools
 RUN apk add --no-cache bash curl docker-cli
 
 WORKDIR /root/

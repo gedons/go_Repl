@@ -1,74 +1,72 @@
+// internal/runner/runner.go
 package runner
 
 import (
-	"bytes"
-	"fmt"
-	"go-repl/internal/utils"
-	"log"
-	"os"
-	"os/exec"
+    "bytes"
+    "context"
+    "fmt"
+    "log"
+    "os"
+    "os/exec"
+    "path/filepath"
+    "time"
+
+    "go-repl/internal/utils"
 )
 
-func logExecutionStep(step string) {
-	log.Printf("[INFO]: %s", step)
+func logStep(step string) {
+    log.Printf("[REPL] %s\n", step)
 }
 
-func cleanUpTempFiles(dir string) error {
-	err := os.RemoveAll(dir)
-	if err != nil {
-		return fmt.Errorf("failed to clean up temp files: %v", err)
-	}
-	logExecutionStep(fmt.Sprintf("Cleaned up temp files from %s", dir))
-	return nil
+func cleanup(dir string) {
+    if err := os.RemoveAll(dir); err != nil {
+        logStep(fmt.Sprintf("cleanup failed: %v", err))
+    } else {
+        logStep("temp files cleaned")
+    }
 }
 
-func ExecuteCode(code string) (string, string) {
-    // Log the start of execution
-    logExecutionStep("Starting code execution")
+// ExecuteCode compiles temp.go into a binary and runs it under a timeout.
+func ExecuteCode(code string) (stdoutStr, stderrStr string) {
+    logStep("starting execution")
 
-    // Save code to temp.go
-    _, dir, err := utils.SaveCodeToFile(code)
+    // 1) write code
+    srcPath, dir, err := utils.SaveCodeToFile(code)
     if err != nil {
-        logExecutionStep(fmt.Sprintf("Failed to save code: %v", err))
-        return "", fmt.Sprintf("Failed to save code: %v", err)
-    }
-    logExecutionStep("Code saved to file")
-
-    // Log the command that will be executed
-    logExecutionStep(fmt.Sprintf("Running Docker command: docker run --rm -v %s:/app -w /app golang:1.21-alpine go run temp.go", dir))
-
-    // Run Docker command to execute the code
-    cmd := exec.Command("docker", "run", "--rm",
-        "-v", fmt.Sprintf("%s:/app", dir),
-        "-v", "/var/run/docker.sock:/var/run/docker.sock", 
-        "-w", "/app",
-        "golang:1.21-alpine",
-        "go", "run", "temp.go",
-    )
-
-
-
-    var stdout, stderr bytes.Buffer
-    cmd.Stdout = &stdout
-    cmd.Stderr = &stderr
-
-    // Execute the command
-    err = cmd.Run()
-    if err != nil {
-        logExecutionStep(fmt.Sprintf("Error executing command: %v", err))
-        logExecutionStep(fmt.Sprintf("Docker error output: %v", stderr.String()))
-        return stdout.String(), stderr.String()
+        return "", fmt.Sprintf("save error: %v", err)
     }
 
+    // ensure cleanup
+    defer cleanup(dir)
 
-    logExecutionStep("Execution successful")
+    // 2) compile
+    binPath := filepath.Join(dir, "tempbin")
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
 
-    // Clean up temp files after execution
-    err = cleanUpTempFiles(dir)
-    if err != nil {
-        logExecutionStep(fmt.Sprintf("Error cleaning up temp files: %v", err))
+    logStep("compiling code")
+    build := exec.CommandContext(ctx, "go", "build", "-o", binPath, srcPath)
+    var buildOut, buildErr bytes.Buffer
+    build.Stdout = &buildOut
+    build.Stderr = &buildErr
+    if err := build.Run(); err != nil {
+        return buildOut.String(), buildErr.String()
     }
 
-    // Return the standard output or error message
-    return stdout.String(), ""
+    // 3) run
+    logStep("running binary")
+    run := exec.CommandContext(ctx, binPath)
+    var runOut, runErr bytes.Buffer
+    run.Stdout = &runOut
+    run.Stderr = &runErr
+    if err := run.Run(); err != nil {
+        // timeout?
+        if ctx.Err() == context.DeadlineExceeded {
+            return "", "execution timed out"
+        }
+        return runOut.String(), runErr.String()
+    }
+
+    logStep("execution successful")
+    return runOut.String(), ""
 }
