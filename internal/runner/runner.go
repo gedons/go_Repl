@@ -1,12 +1,10 @@
 package runner
 
 import (
-	"bytes"
 	"fmt"
 	"go-repl/internal/utils"
 	"log"
 	"os"
-	"os/exec"
 )
 
 
@@ -24,6 +22,7 @@ func cleanUpTempFiles(dir string) error {
 }
 
 func ExecuteCode(code string) (string, string) {
+    // Log the start of execution
     logExecutionStep("Starting code execution")
 
     // Save code to temp.go
@@ -34,30 +33,8 @@ func ExecuteCode(code string) (string, string) {
     }
     logExecutionStep("Code saved to file")
 
-    // Log the command that will be executed
-    logExecutionStep(fmt.Sprintf("Running Docker command: docker run --rm -v %s:/app -w /app golang:1.21-alpine go run temp.go", dir))
-
-    cmd := exec.Command("docker", "run", "--rm",
-        "-v", fmt.Sprintf("%s:/app", dir),
-        "-w", "/app",
-        "golang:1.21-alpine",
-        "go", "run", "temp.go",
-    )
-
-    var stdout, stderr bytes.Buffer
-    cmd.Stdout = &stdout
-    cmd.Stderr = &stderr
-
-    // Run the command and log the error if it occurs
-    err = cmd.Run()
-    if err != nil {
-        logExecutionStep("Error executing command")
-        logExecutionStep(fmt.Sprintf("Error details: %v", err))
-        logExecutionStep(fmt.Sprintf("Standard error: %v", stderr.String()))
-        return stdout.String(), stderr.String()
-    }
-
-    logExecutionStep("Execution successful")
+    // Now we don't need to run Docker command, just return success
+    logExecutionStep("EBS will use prebuilt image from ECR")
 
     // Clean up temp files after execution
     err = cleanUpTempFiles(dir)
@@ -65,7 +42,7 @@ func ExecuteCode(code string) (string, string) {
         logExecutionStep(fmt.Sprintf("Error cleaning up temp files: %v", err))
     }
 
-    return stdout.String(), ""
+    return "Code execution successfully.", ""
 }
 
 

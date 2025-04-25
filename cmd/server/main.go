@@ -9,6 +9,9 @@ import (
 
 
 func main(){
+	// Set Gin to release mode for production
+	gin.SetMode(gin.ReleaseMode)
+
 	router := gin.Default()
 
 	// Welcome route
