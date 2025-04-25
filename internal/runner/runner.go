@@ -39,11 +39,12 @@ func ExecuteCode(code string) (string, string) {
 
     // Run Docker command to execute the code
     cmd := exec.Command("docker", "run", "--rm",
-        "-v", fmt.Sprintf("%s:/app", dir),
+        "-v", fmt.Sprintf("%s:/app", "/tmp/code-temp"), 
         "-w", "/app",
         "golang:1.21-alpine",
         "go", "run", "temp.go",
     )
+
 
     var stdout, stderr bytes.Buffer
     cmd.Stdout = &stdout
@@ -52,10 +53,11 @@ func ExecuteCode(code string) (string, string) {
     // Execute the command
     err = cmd.Run()
     if err != nil {
-        logExecutionStep("Error executing command")
-        logExecutionStep(fmt.Sprintf("Execution failed: %v", stderr.String()))
+        logExecutionStep(fmt.Sprintf("Error executing command: %v", err))
+        logExecutionStep(fmt.Sprintf("Docker error output: %v", stderr.String()))
         return stdout.String(), stderr.String()
     }
+
 
     logExecutionStep("Execution successful")
 
