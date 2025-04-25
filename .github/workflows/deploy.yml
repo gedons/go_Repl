@@ -1,47 +1,76 @@
-name: Deploy to Elastic Beanstalk
+name: Deploy Go App to AWS via ECR and EBS
 
 on:
   push:
     branches:
       - master
 
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REPOSITORY: ${{ secrets.AWS_ECR_REPOSITORY }}
+  S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+  EB_APP_NAME: ${{ secrets.EB_APP_NAME }}
+  EB_ENV_NAME: ${{ secrets.EB_ENV_NAME }}
+  DOCKER_IMAGE_TAG: latest
+
 jobs:
   deploy:
+    name: Build & Deploy
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout source
-        uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.21'
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
 
-      - name: Zip application
-        run: zip -r deploy.zip . -x "*.git*" -x "deploy.zip"
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+    - name: Build, tag, and push image to ECR
+      run: |
+        IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.DOCKER_IMAGE_TAG }}
+        docker build -t $IMAGE_URI .
+        docker push $IMAGE_URI
+        echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
 
-      - name: Set dynamic S3 key
-        id: vars
-        run: echo "s3_key=repl-go-api/app-${{ github.sha }}.zip" >> $GITHUB_OUTPUT
+    - name: Create Dockerrun.aws.json
+      run: |
+        cat > Dockerrun.aws.json <<EOF
+        {
+          "AWSEBDockerrunVersion": "1",
+          "Image": {
+            "Name": "${IMAGE_URI}",
+            "Update": "true"
+          },
+          "Ports": [
+            {
+              "ContainerPort": "8080"
+            }
+          ]
+        }
+        EOF
 
-      - name: Upload to S3
-        run: aws s3 cp deploy.zip s3://${{ secrets.AWS_S3_BUCKET }}/${{ steps.vars.outputs.s3_key }}
+    - name: Upload Dockerrun.aws.json to S3
+      run: |
+        VERSION_LABEL="go-app-$(date +%Y%m%d%H%M%S)"
+        aws s3 cp Dockerrun.aws.json s3://${{ env.S3_BUCKET }}/$VERSION_LABEL/Dockerrun.aws.json
+        echo "VERSION_LABEL=$VERSION_LABEL" >> $GITHUB_ENV
 
-      - name: Deploy to Elastic Beanstalk
-        run: |
-          aws elasticbeanstalk create-application-version \
-            --application-name ${{ secrets.EB_APP_NAME }} \
-            --version-label v-${{ github.sha }} \
-            --source-bundle S3Bucket=${{ secrets.AWS_S3_BUCKET }},S3Key=${{ steps.vars.outputs.s3_key }}
+    - name: Deploy to Elastic Beanstalk
+      run: |
+        aws elasticbeanstalk create-application-version \
+          --application-name ${{ env.EB_APP_NAME }} \
+          --version-label $VERSION_LABEL \
+          --source-bundle S3Bucket=${{ env.S3_BUCKET }},S3Key=$VERSION_LABEL/Dockerrun.aws.json
 
-          aws elasticbeanstalk update-environment \
-            --environment-name ${{ secrets.EB_ENV_NAME }} \
-            --version-label v-${{ github.sha }}
+        aws elasticbeanstalk update-environment \
+          --application-name ${{ env.EB_APP_NAME }} \
+          --environment-name ${{ env.EB_ENV_NAME }} \
+          --version-label $VERSION_LABEL
