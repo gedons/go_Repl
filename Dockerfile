@@ -23,3 +23,4 @@ EXPOSE 8080
 
 # Run the Go binary
 CMD ["./main"]
+
