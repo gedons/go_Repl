@@ -6,21 +6,20 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod tidy
 
-# Copy the rest of the code and build the Go binary
+# Copy the rest of the code into the container
 COPY . ./
-RUN GOOS=linux GOARCH=amd64 go build -o main .
 
-# Second stage: Use a smaller base image for the actual running container
+# Build the Go binary from the correct entrypoint
+RUN GOOS=linux GOARCH=amd64 go build -o main ./cmd/server
+
+# Second stage: Use a smaller base image
 FROM alpine:3.18
 
 WORKDIR /root/
 
-# Copy the compiled Go binary from the build stage
+# Copy the compiled binary from build stage
 COPY --from=build /app/main .
 
-# Expose the port the app will listen on
 EXPOSE 8080
 
-# Run the Go binary
 CMD ["./main"]
-
