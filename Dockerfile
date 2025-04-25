@@ -1,29 +1,29 @@
-# Use a multi-stage build to compile the Go binary
-FROM golang:1.21-alpine as build
+# Stage 1: Build the Go binary
+FROM golang:1.21-alpine AS build
 
 WORKDIR /app
 
-# Copy Go module files and download dependencies
+# Download dependencies
 COPY go.mod go.sum ./
 RUN go mod tidy
 
-# Copy the rest of the code and build the Go binary
-COPY . ./
-RUN GOOS=linux GOARCH=amd64 go build -o main ./cmd/server
+# Copy app source and build
+COPY . .
+RUN go build -o main ./cmd/server
 
-# Use Docker-in-Docker for running Docker commands
-FROM docker:20.10.7-dind
+# Stage 2: Final image without DinD
+FROM alpine:3.18
+
+# Install Docker client only (no dockerd), and other required tools
+RUN apk add --no-cache bash curl docker-cli
 
 WORKDIR /root/
 
-# Install Go (to run the Go binary) and dependencies
-RUN apk add --no-cache bash git curl
-
-# Copy the compiled Go binary from the build stage
+# Copy the compiled binary
 COPY --from=build /app/main .
 
-# Expose the port the app will listen on
+# Expose the application port
 EXPOSE 8080
 
-# Start Docker daemon and your Go application
-CMD ["sh", "-c", "dockerd & ./main"]
+# Run the Go app
+CMD ["./main"]

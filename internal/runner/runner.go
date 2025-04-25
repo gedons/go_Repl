@@ -39,11 +39,13 @@ func ExecuteCode(code string) (string, string) {
 
     // Run Docker command to execute the code
     cmd := exec.Command("docker", "run", "--rm",
-        "-v", fmt.Sprintf("%s:/app", "/tmp/code-temp"), 
+        "-v", fmt.Sprintf("%s:/app", dir),
+        "-v", "/var/run/docker.sock:/var/run/docker.sock", 
         "-w", "/app",
         "golang:1.21-alpine",
         "go", "run", "temp.go",
     )
+
 
 
     var stdout, stderr bytes.Buffer
