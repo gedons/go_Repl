@@ -23,38 +23,48 @@ func ExecuteCode(code string) (string, string) {
 	// 1) Save user code
 	srcPath, dir, err := utils.SaveCodeToFile(code)
 	if err != nil {
+		logStep(fmt.Sprintf("Save error: %v", err))
 		return "", fmt.Sprintf("save error: %v", err)
 	}
 	defer os.RemoveAll(dir)
-	logStep("code written to " + srcPath)
+	logStep("Code written to " + srcPath)
 
 	// 2) Compile temp.go -> tempbin
 	binPath := filepath.Join(dir, "tempbin")
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	logStep("compiling user code")
+	logStep("Compiling user code...")
 	build := exec.CommandContext(ctx, "go", "build", "-o", binPath, srcPath)
-	var buildErr bytes.Buffer
+	var buildOut, buildErr bytes.Buffer
+	build.Stdout = &buildOut
 	build.Stderr = &buildErr
-	if err := build.Run(); err != nil {
-		return "", buildErr.String()
+	err = build.Run()
+
+	if err != nil {
+		logStep(fmt.Sprintf("Compilation failed: %v", err))
+		logStep(fmt.Sprintf("Compilation stderr: %s", buildErr.String()))
+		return "", fmt.Sprintf("compile error: %v\nstderr: %s", err, buildErr.String())
 	}
 
-	// 3) Run the compiled binary
-	logStep("running user binary")
+	logStep("Compilation successful")
+
+	// 3) Run compiled binary
+	logStep("Running user binary...")
 	run := exec.CommandContext(ctx, binPath)
 	var out, runErr bytes.Buffer
 	run.Stdout = &out
 	run.Stderr = &runErr
 
-	if err := run.Run(); err != nil {
+	err = run.Run()
+	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			return out.String(), "execution timed out"
 		}
+		logStep(fmt.Sprintf("Run error: %v", err))
 		return out.String(), runErr.String()
 	}
 
-	logStep("execution finished successfully")
+	logStep("Execution finished successfully")
 	return out.String(), ""
 }
