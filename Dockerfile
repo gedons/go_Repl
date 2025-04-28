@@ -3,27 +3,27 @@ FROM golang:1.21-alpine AS build
 
 WORKDIR /app
 
-# Download dependencies
+# Copy Go module files and download dependencies
 COPY go.mod go.sum ./
 RUN go mod tidy
 
-# Copy app source and build
-COPY . .
-RUN go build -o main ./cmd/server
+COPY . ./
+RUN GOOS=linux GOARCH=amd64 go build -o server ./cmd/server  
 
-# Stage 2: Final image without DinD
+# Stage 2: Final image
 FROM alpine:3.18
 
-# Install Docker client only, and other required tools
-RUN apk add --no-cache bash curl docker-cli
+# Install bash and curl (if needed)
+RUN apk add --no-cache bash curl
 
-WORKDIR /root/
+# Copy the compiled binary from the build stage to /usr/local/bin/
+COPY --from=build /app/server /usr/local/bin/server
 
-# Copy the compiled binary
-COPY --from=build /app/main .
+# Set the working directory to where the binary is
+WORKDIR /usr/local/bin
 
 # Expose the application port
 EXPOSE 8080
 
-# Run the Go app
-CMD ["./main"]
+# Set the entrypoint to run the binary
+CMD ["./server"]

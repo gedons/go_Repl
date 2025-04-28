@@ -1,31 +1,20 @@
-// internal/utils/file.go
 package utils
 
 import (
-    "os"
+	"os"
+	"path/filepath"
 )
 
-func SaveCodeToFile(code string) (filePath string, dir string, err error) {
-    dir = "/tmp/repl"
-    filePath = dir + "/temp.go"
-
-    if err = os.MkdirAll(dir, 0755); err != nil {
-        return "", "", err
-    }
-
-    f, err := os.Create(filePath)
-    if err != nil {
-        return "", "", err
-    }
-    defer f.Close()
-
-    if _, err = f.WriteString(code); err != nil {
-        return "", "", err
-    }
-    // ensure it’s flushed
-    if err = f.Sync(); err != nil {
-        return "", "", err
-    }
-
-    return filePath, dir, nil
+// SaveCodeToFile saves code to a temporary file and returns file path and dir
+func SaveCodeToFile(code string) (string, string, error) {
+	dir, err := os.MkdirTemp("", "gorepl")
+	if err != nil {
+		return "", "", err
+	}
+	filePath := filepath.Join(dir, "temp.go")
+	err = os.WriteFile(filePath, []byte(code), 0644)
+	if err != nil {
+		return "", "", err
+	}
+	return filePath, dir, nil
 }
