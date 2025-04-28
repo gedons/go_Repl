@@ -6,7 +6,7 @@ WORKDIR /app
 # Copy go.mod and go.sum first to leverage Docker cache for dependencies
 COPY go.mod go.sum ./
 
-# Ensure go mod tidy runs properly
+# Run go mod tidy to ensure all dependencies are resolved
 RUN go mod tidy
 
 # Now copy the rest of the application code
