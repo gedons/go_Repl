@@ -3,16 +3,28 @@ package main
 import (
 	"go-repl/internal/handler"
 	"net/http"
+	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
-
-func main(){
+func main() {
 	// Set Gin to release mode for production
 	gin.SetMode(gin.ReleaseMode)
 
+	// Initialize Gin router
 	router := gin.Default()
+
+	// Setup CORS middleware
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:5173"}, 
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
 	// Welcome route
 	router.GET("/", func(c *gin.Context) {
@@ -31,9 +43,6 @@ func main(){
 	// Set up the routes and attach the handlers
 	router.POST("/run", handler.RunCode)
 
-	//start the server on port 8080
+	// Start the server on port 8080
 	router.Run(":8080")
-
-	
-
 }
