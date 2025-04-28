@@ -1,29 +1,20 @@
-# Stage 1: Build the Go binary
-FROM golang:1.21-alpine AS build
+# Stage 1: build your API server
+FROM golang:1.21-alpine AS builder
 
 WORKDIR /app
-
-# Copy Go module files and download dependencies
 COPY go.mod go.sum ./
 RUN go mod tidy
-
 COPY . ./
-RUN GOOS=linux GOARCH=amd64 go build -o server ./cmd/server  
+RUN GOOS=linux GOARCH=amd64 go build -o server ./cmd/server
 
-# Stage 2: Final image
+# Stage 2: runtime with Go compiler installed
 FROM alpine:3.18
 
-# Install bash and curl (if needed)
-RUN apk add --no-cache bash curl
+# install bash, curl—and the Go toolchain so user snippets can compile
+RUN apk add --no-cache bash curl go
 
-# Copy the compiled binary from the build stage to /usr/local/bin/
-COPY --from=build /app/server /usr/local/bin/server
+WORKDIR /root/
+COPY --from=builder /app/server .
 
-# Set the working directory to where the binary is
-WORKDIR /usr/local/bin
-
-# Expose the application port
 EXPOSE 8080
-
-# Set the entrypoint to run the binary
 CMD ["./server"]
